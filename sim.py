@@ -32,53 +32,53 @@ class Simulation:
         if (self.done):
             return
         next_event_time = 0
-        if (self.server_next_done_time[i] == float('inf') for i in range(num_servers)):
+        if all(server == float('inf') for server in self.server_next_done_time):
             next_event_time = self.next_arrival_time
-            print("1",next_event_time)
         else:
             next_event_time = min(self.next_arrival_time, min(self.server_next_done_time))
-            print("2", next_event_time)
         self.total_servicetime += self.num_in_system * (next_event_time - self.clock)
         self.total_waittime += self.num_waiting * (next_event_time - self.clock)
+        if (self.total_waittime<0):
+            exit()
         self.clock = next_event_time
         if (next_event_time < self.total_time):
             if (self.next_arrival_time == next_event_time):
                 self.handle_arrival_event()
-        for i in range(num_servers):
+        for i in range(self.num_servers):
             if (self.server_next_done_time[i] == next_event_time):
                 self.server_curr_queue_size[i] -= 1
                 self.num_in_system -= 1
-                self.num_waiting -= 1
                 if (self.server_curr_queue_size[i] > 0):
-                    self.server_next_done_time[i] = self.generate_service_time()
+                    self.num_waiting -= 1
+                    self.server_next_done_time[i] = self.clock + self.generate_service_time(i)
                 else:
                     self.server_next_done_time[i] = float('inf')
         if (self.clock >= self.total_time):
             if (self.server_curr_queue_size[i] == 0 for i in range(self.num_servers)):
                 self.endtime = self.clock 
-                self.average_waittime = self.total_waittime/(self.total_requests-self.dropped)
-                self.average_servicetime = self.total_servicetime/(self.total_requests-self.dropped)
+                self.average_waittime = self.total_waittime/(self.total_requests-self.num_dropped)
+                self.average_servicetime = self.total_servicetime/(self.total_requests-self.num_dropped)
                 self.done = True
 
     def handle_arrival_event(self):
         self.total_requests += 1
-        chosen_server = np.random.choice(num_servers, p=forwarding_prob_arr)  
+        chosen_server = np.random.choice(self.num_servers, p=self.forwarding_prob_arr)  
         if (self.queue_max_size_arr[chosen_server] + 1 == self.server_curr_queue_size[chosen_server]):
             self.num_dropped += 1
         else:
             self.server_curr_queue_size[chosen_server] += 1
             self.num_in_system += 1
             if (self.server_curr_queue_size[chosen_server] == 1):
-                self.server_next_done_time[chosen_server] = self.generate_service_time(chosen_server) 
+                self.server_next_done_time[chosen_server] = self.clock + self.generate_service_time(chosen_server) 
             else:
                 self.num_waiting += 1
         self.next_arrival_time = self.clock + self.generate_next_arrival()
 
     def generate_next_arrival(self):
-        return np.random.exponential(1.0/_lambda)
+        return np.random.exponential(1.0/self._lambda)
 
     def generate_service_time(self, server_idx):
-        service_rate = service_rate_arr[server_idx]
+        service_rate = self.service_rate_arr[server_idx]
         return np.random.exponential(1.0/service_rate)
 
     def run(self):
@@ -87,6 +87,35 @@ class Simulation:
 
     def print_results(self):
         print(self.total_requests, self.num_dropped, self.endtime, self.average_waittime, self.average_servicetime)
+
+    def print_elab(self):
+        #print("    total_time:", self.total_time)
+        #print("    num_servers:", self.num_servers)
+        #print("    forwarding_prob_arr:", self.forwarding_prob_arr)
+        #print("    _lambda:", self._lambda)
+        #print("    queue_max_size_arr:", self.queue_max_size_arr)
+        #print("    service_rate_arr:", self.service_rate_arr)
+
+        print("    clock:", self.clock)
+        print("    next_arrival_time:", self.next_arrival_time)
+        print("    server_next_done_time:", self.server_next_done_time)
+        print("    server_curr_queue_size:", self.server_curr_queue_size)
+        print("    num_in_system:", self.num_in_system)
+        print("    num_waiting:", self.num_waiting)
+        print("    total_waittime:", self.total_waittime)
+        print("    total_servicetime:", self.total_servicetime)
+        print("    done:", self.done)
+
+        print("    total_requests:", self.total_requests)
+        print("    num_dropped:", self.num_dropped)
+        print("-------------------------------")
+
+    def get_average_service_time(self):
+        if self.done:
+            return self.average_servicetime
+        else:
+            return None
+
 
 
 
@@ -106,7 +135,9 @@ if __name__ == '__main__':
     first_service_rate_index = lambda_index+num_servers+1
     for i in range(num_servers):
         service_rate_arr[i] = float(sys.argv[first_service_rate_index+i])
-    ########  initializing simulation  ########
+    ########  initializing and running simulation  ########
     s = Simulation(total_time, num_servers, forwarding_prob_arr, _lambda, queue_max_size_arr, service_rate_arr) 
     s.run()
     s.print_results()
+
+
